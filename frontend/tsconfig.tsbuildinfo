@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/utils.ts","./src/vite-env.d.ts","./src/components/songsearch.tsx","./src/pages/admin.tsx","./src/pages/adminevents.tsx","./src/pages/adminmusicians.tsx","./src/pages/home.tsx","./src/pages/jam.tsx","./src/pages/roster.tsx","./src/pages/setlist.tsx","./src/pages/songeditor.tsx","./src/store/useappstore.ts"],"version":"5.9.3"}

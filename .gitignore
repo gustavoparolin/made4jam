@@ -1,0 +1,7 @@
+# Ignore environment files so passwords aren't pushed to GitHub
+.env
+api/.env
+
+# Ignore node module installs
+node_modules/
+dist/

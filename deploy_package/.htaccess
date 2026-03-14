@@ -1,0 +1,22 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /made4jam/
+
+    # Prevent caching of index.html so updates are visible immediately
+    <Files index.html>
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires 0
+    </Files>
+
+    # Ignore the API folder (let the API handle its own routes)
+    RewriteCond %{REQUEST_URI} ^/made4jam/api/ [NC]
+    RewriteRule ^ - [L]
+
+    # If the requested file or directory exists, serve it
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Otherwise, serve index.html for React Router to handle
+    RewriteRule . /made4jam/index.html [L]
+</IfModule>
