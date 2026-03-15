@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { generateRosterGapsText } from '../utils/whatsapp';
 
 const ROLES = [
   { id: 'vocals', label: 'Vocals' },
@@ -10,8 +11,9 @@ const ROLES = [
 ];
 
 export default function Roster() {
-  const { songs, selections, fetchSongs, fetchSelections, viewMode } = useAppStore();
+  const { songs, selections, fetchSongs, fetchSelections, viewMode, events, eventId } = useAppStore();
   const [expandedArtists, setExpandedArtists] = useState<Set<string>>(new Set());
+  const [shareText, setShareText] = useState<string | null>(null);
 
   const toggleArtist = (artist: string) => {
     const newExpanded = new Set(expandedArtists);
@@ -50,11 +52,41 @@ export default function Roster() {
 
   const sortedArtists = Object.keys(groupedSongs).sort();
 
+  const toggleAll = () => {
+    if (expandedArtists.size === sortedArtists.length && sortedArtists.length > 0) {
+      setExpandedArtists(new Set());
+    } else {
+      setExpandedArtists(new Set(sortedArtists));
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col items-start">
         <h2 className="text-3xl font-bold">Public Roster</h2>
         <p className="text-gray-400 mt-2">See who's signed up for what. Find the gaps and volunteer!</p>
+        <div className="mt-4 flex gap-2">
+          <button 
+            onClick={toggleAll}
+            className="text-xs font-semibold bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded transition"
+          >
+            {expandedArtists.size === sortedArtists.length && sortedArtists.length > 0 ? 'Collapse All Bands' : 'Expand All Bands'}
+          </button>
+          
+          <button 
+            onClick={() => {
+              const text = generateRosterGapsText(songs, selections, events.find(e => e.id === eventId));
+              if (text) {
+                setShareText(text);
+              } else {
+                alert("No roster gaps found! Every song is fully staffed.");
+              }
+            }}
+            className="text-xs font-semibold bg-green-700 hover:bg-green-600 text-green-100 px-3 py-1.5 rounded transition flex items-center gap-1"
+          >
+            📤 Share Gaps to WhatsApp
+          </button>
+        </div>
       </div>
 
       {viewMode === 'spacious' ? (
@@ -167,6 +199,37 @@ export default function Roster() {
           </div>
         ))}
       </div>
+      )}
+
+      {shareText && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold">Share Roster Gaps</h3>
+            <p className="text-sm text-gray-400 mb-2">Copy this text and paste it into WhatsApp:</p>
+            <textarea 
+              readOnly 
+              value={shareText} 
+              className="w-full h-64 bg-gray-900 border border-gray-700 rounded p-3 text-sm flex-1 whitespace-pre-wrap"
+            />
+            <div className="flex gap-3 justify-end mt-4">
+              <button
+                onClick={() => setShareText(null)}
+                className="px-4 py-2 rounded font-semibold bg-gray-700 hover:bg-gray-600 transition"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(shareText);
+                  alert('Text copied to clipboard!');
+                }}
+                className="px-4 py-2 rounded font-semibold bg-green-700 hover:bg-green-600 transition"
+              >
+                Copy to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

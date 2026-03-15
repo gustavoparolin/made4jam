@@ -75,7 +75,7 @@ function App() {
       </main>
       
       <footer className="bg-gray-800 border-t border-gray-700 p-4 text-center text-xs text-gray-500 mt-8 print:hidden">
-        &copy; {new Date().getFullYear()} Made4Jam - Gustavo Parolin
+        &copy; {new Date().getFullYear()} Made4Jam v{__APP_VERSION__} - Gustavo Parolin
       </footer>
     </div>
   )

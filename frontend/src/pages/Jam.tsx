@@ -75,12 +75,26 @@ export default function Jam() {
 
   const sortedArtists = Object.keys(groupedSongs).sort();
 
+  const toggleAll = () => {
+    if (expandedArtists.size === sortedArtists.length && sortedArtists.length > 0) {
+      setExpandedArtists(new Set());
+    } else {
+      setExpandedArtists(new Set(sortedArtists));
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 flex flex-col md:flex-row justify-between items-start gap-6">
+      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 flex flex-col md:flex-row justify-between items-start gap-6">
         <div className="flex-1">
           <h2 className="text-2xl font-bold">Rock on, <span className="text-purple-500">{musician.name}</span>!</h2>
           <p className="text-gray-400 mt-1">Select the instruments you want to play for each song below.</p>
+          <button 
+            onClick={toggleAll}
+            className="mt-4 text-xs font-semibold bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded transition"
+          >
+            {expandedArtists.size === sortedArtists.length && sortedArtists.length > 0 ? 'Collapse All Bands' : 'Expand All Bands'}
+          </button>
         </div>
         <div className="flex-1 w-full max-w-md bg-gray-900/50 p-4 rounded-lg border border-gray-700/50">
           <SongSearch />

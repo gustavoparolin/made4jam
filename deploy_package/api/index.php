@@ -35,6 +35,39 @@ try {
     if ($method === 'GET' && $request === 'test') {
         response(['message' => 'PHP/MySQL Backend is running!']);
     }
+    
+    // GET /export
+    elseif ($method === 'GET' && $request === 'export') {
+        $tables = ['m4j_events', 'm4j_musicians', 'm4j_songs', 'm4j_selections', 'm4j_lineups'];
+        $sql = "-- Made4Jam Database Backup\n-- Date: " . date('Y-m-d H:i:s') . "\n\n";
+        
+        $sql .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
+
+        foreach ($tables as $table) {
+            $stmt = $pdo->query("SELECT * FROM `$table`");
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (count($rows) > 0) {
+                $sql .= "-- \n-- Data for table `$table`\n-- \n";
+                $sql .= "TRUNCATE TABLE `$table`;\n";
+                foreach ($rows as $row) {
+                    $keys = array_keys($row);
+                    $escapedValues = array_map(function($val) use ($pdo) {
+                        return $val === null ? 'NULL' : $pdo->quote($val);
+                    }, array_values($row));
+                    $sql .= "INSERT INTO `$table` (`" . implode("`, `", $keys) . "`) VALUES (" . implode(", ", $escapedValues) . ");\n";
+                }
+                $sql .= "\n";
+            }
+        }
+        
+        $sql .= "SET FOREIGN_KEY_CHECKS=1;\n";
+
+        header('Content-Type: text/plain');
+        header('Content-Disposition: attachment; filename="made4jam_backup_' . date('Y-m-d_H-i') . '.sql"');
+        echo $sql;
+        exit;
+    }
+
       // GET /events
       elseif ($method === 'GET' && $request === 'events') {
           // Self-heal: ensure all events have a slug

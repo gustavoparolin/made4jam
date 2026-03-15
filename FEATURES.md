@@ -14,3 +14,8 @@ Backend Infrastructure (PHP / MySQL)
 Single-Point REST API: Powered by a clean, frameless index.php router handling all CRUD actions via standard HTTP verbs (GET, POST, PUT, DELETE).
 Self-Healing Mechanics: The API layer actively monitors database integrity, automatically applying retro-active slugs and patching tokens if database schemas ever shift or drift.
 Multi-Environment Ready: Dynamically switches database credentials via .env injection depending on whether it's executing on localhost mapped to a WAMP environment, or running live on a standard cPanel Linux host.
+Database Export: Dedicated `/api/export` endpoint allows administrators to download the entire MySQL database as a localized structurally complete `.sql` backup file.
+
+System Architecture
+Version Tracking: Global `__APP_VERSION__` variable passed strictly through the Vite bundler directly from `package.json` into the React application footprint, rendering dynamic footers effortlessly.
+Changelog Standard: Strictly maintained `CHANGELOG.md` following the "Keep a Changelog" formatting ensures accurate historical documentation of modifications and semantic version implementations.

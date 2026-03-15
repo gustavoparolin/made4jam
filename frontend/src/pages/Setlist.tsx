@@ -54,14 +54,30 @@ export default function Setlist() {
   const sortedArtists = Object.keys(groupedSongs).sort();
   let songIndex = 0;
 
+  const toggleAll = () => {
+    if (expandedArtists.size === sortedArtists.length && sortedArtists.length > 0) {
+      setExpandedArtists(new Set());
+    } else {
+      setExpandedArtists(new Set(sortedArtists));
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="mb-6 flex justify-between items-end border-b border-gray-700 pb-4">
         <div>
           <h2 className="text-4xl font-bold uppercase tracking-wider bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent inline-block">Official Setlist</h2>
           <p className="text-gray-400 mt-2">The final bands organized for the stage.</p>
+          <div className="mt-4 flex gap-2 print:hidden">
+            <button
+              onClick={toggleAll}
+              className="text-xs font-semibold bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded transition"
+            >
+              {expandedArtists.size === sortedArtists.length && sortedArtists.length > 0 ? 'Collapse All Bands' : 'Expand All Bands'}
+            </button>
+          </div>
         </div>
-        <button 
+        <button
           onClick={() => window.print()}
           className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm font-semibold print:hidden"
         >
