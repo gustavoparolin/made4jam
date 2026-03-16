@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Made4Jam (React + PHP/MySQL Edition)
 ## 🤖 AI Agent & Developer Architecture Playbook
 
@@ -170,3 +171,61 @@ That's it!
 * **Single-Point REST API:** Powered by a clean, frameless \index.php\ router handling all CRUD actions via standard HTTP verbs (GET, POST, PUT, DELETE).
 * **Self-Healing Mechanics:** The API layer actively monitors database integrity, automatically applying retro-active slugs and patching tokens if database schemas ever shift or drift.
 * **Multi-Environment Ready:** Dynamically switches database credentials via \.env\ injection depending on whether it's executing on \localhost\ mapped to a WAMP environment, or running live on a standard cPanel Linux host.
+=======
+# Made4Jam (v1.0)
+
+Made4Jam is a Jam session scheduling and setlist application. It allows organizing jam sessions by managing setlists, role assignments (vocals, guitars, bass, drums, etc.), and overall coordination between musicians.
+
+## Features
+
+- **Setlist Management**: Users can vote for and select songs to play.
+- **Roster & Roles**: See who is playing what instrument on which song, with global spacious and compact table views.
+- **Admin Dashboard**: Manage the event, edit songs, update roles, and control the entire jam setlist.
+- **Song Editor**: Dedicated CMS interface for editing song details and lyrics.
+
+## Tech Stack
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Zustand
+- **Backend**: Node.js, Express, better-sqlite3
+- **Database**: Local SQLite (`jam.db`)
+
+## Prerequisites
+
+- Node.js (v18+ recommended)
+- npm (v9+ recommended)
+
+## How to Run Locally
+
+1. **Clone the repository**:
+   ```bash
+   git clone <your-repo-url>
+   cd Made4Jam
+   ```
+
+2. **Start the Backend**:
+   The backend uses `better-sqlite3` and auto-initializes the database.
+   ```bash
+   cd backend
+   npm install
+   npm run dev
+   ```
+   The API will run on `http://localhost:3001`.
+
+3. **Start the Frontend**:
+   Open a new terminal session.
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   The UI will run on `http://localhost:3000`.
+
+## Architecture & Data Model
+
+- **Global View Modes**: Toggle between spacious table layouts and compact lists natively synced across all views.
+- **SQLite Configuration**: Found heavily embedded in `backend/src/db.ts` automatically migrating new schemas (like `.lyrics`).
+
+## Deployment / v1.0
+
+This tag represents the robust MERN/SQLite conversion from a legacy PHP architecture. All functional pages (Jam, Setlist, Admin, Roster, SongEditor) are active and consistent.
+>>>>>>> cd921337911779cfce96476d51e8fc27ce24e084
