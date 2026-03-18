@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { SortableRow } from '../components/SortableRow';
 import { useAppStore } from '../store/useAppStore';
 import AdminMusicians from './AdminMusicians';
 import AdminEvents from './AdminEvents';
@@ -19,20 +22,11 @@ export default function Admin() {
   const navigate = useNavigate();
   const [authorized, setAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState<'lineups' | 'events' | 'musicians'>('lineups');
-  const { eventId, setEventId, songs, selections, fetchSongs, fetchSelections, events, fetchEvents } = useAppStore();
+  const { eventId, setEventId, songs, blocks, selections, fetchSongs, fetchBlocks, fetchSelections, events, fetchEvents } = useAppStore();
 
   const [lineups, setLineups] = useState<any[]>([]);
-  const [expandedArtists, setExpandedArtists] = useState<Set<string>>(new Set());
-    const [shareText, setShareText] = useState<string | null>(null);  const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set());
-  const toggleArtist = (artist: string) => {
-    const newExpanded = new Set(expandedArtists);
-    if (newExpanded.has(artist)) {
-      newExpanded.delete(artist);
-    } else {
-      newExpanded.add(artist);
-    }
-    setExpandedArtists(newExpanded);
-  };
+  const [shareText, setShareText] = useState<string | null>(null);
+  const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set());
 
   const deleteSong = async (songId: number) => {
     if (!confirm('Are you sure you want to delete this song?')) return;
@@ -59,12 +53,14 @@ export default function Admin() {
 
     fetchEvents();
     fetchSongs();
+    fetchBlocks();
     fetchSelections();
     fetchLineups();
   }, [searchParams, navigate]);
 
   useEffect(() => {
     fetchSongs();
+    fetchBlocks();
     fetchSelections();
     fetchLineups();
   }, [eventId]);
@@ -210,29 +206,123 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
     }
   };
 
-  if (!authorized) return null;
+  // --- DnD Flat Items ---
+  const sortedBlocks = [...(blocks || [])].sort((a, b) => a.sort_order - b.sort_order);
+  const derivedFlatItems: Array<{ type: 'block' | 'song'; id: string; data: any }> = [];
 
-  const groupedSongs = songs.reduce((acc, song) => {
-    const artist = song.artist || 'Unknown Artist';
-    if (!acc[artist]) acc[artist] = [];
-    acc[artist].push(song);
-    return acc;
-  }, {} as Record<string, typeof songs>);
-
-  Object.keys(groupedSongs).forEach(artist => {
-    groupedSongs[artist].sort((a, b) => a.title.localeCompare(b.title));        
+  sortedBlocks.forEach(block => {
+    derivedFlatItems.push({ type: 'block', id: 'block-' + block.id, data: block });
+    const blockSongs = songs
+      .filter(s => s.block_id === block.id)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    blockSongs.forEach(song => {
+      derivedFlatItems.push({ type: 'song', id: 'song-' + song.id, data: song });
+    });
   });
 
-  const sortedArtists = Object.keys(groupedSongs).sort();
-  const currentUrl = window.location.origin;
+  const unassignedSongs = songs
+    .filter(s => !s.block_id)
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  if (unassignedSongs.length > 0 || sortedBlocks.length === 0) {
+    derivedFlatItems.push({ type: 'block', id: 'block-unassigned', data: { id: 0, name: 'Unassigned Songs', sort_order: 999 } });
+    unassignedSongs.forEach(song => {
+      derivedFlatItems.push({ type: 'song', id: 'song-' + song.id, data: song });
+    });
+  }
 
-  const toggleAll = () => {
-    if (expandedArtists.size === sortedArtists.length && sortedArtists.length > 0) {
-      setExpandedArtists(new Set());
-    } else {
-      setExpandedArtists(new Set(sortedArtists));
+  const [activeItems, setActiveItems] = useState(derivedFlatItems);
+
+  useEffect(() => {
+    setActiveItems(derivedFlatItems);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songs, blocks]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = activeItems.findIndex(i => i.id === active.id);
+    const newIndex = activeItems.findIndex(i => i.id === over.id);
+    const newItems = arrayMove(activeItems, oldIndex, newIndex);
+    setActiveItems(newItems);
+
+    let currentBlockId: number | null = null;
+    let blockSort = 0;
+    const songsToUpdate: Array<{ id: number; sort_order: number; block_id: number | null }> = [];
+    const blocksToUpdate: Array<{ id: number; sort_order: number }> = [];
+
+    newItems.forEach((item, index) => {
+      if (item.type === 'block') {
+        if (item.data.id !== 0) {
+          currentBlockId = item.data.id;
+          blocksToUpdate.push({ id: currentBlockId!, sort_order: ++blockSort });
+        } else {
+          currentBlockId = null;
+        }
+      } else if (item.type === 'song') {
+        songsToUpdate.push({ id: item.data.id, sort_order: index, block_id: currentBlockId });
+      }
+    });
+
+    try {
+      if (blocksToUpdate.length > 0) {
+        await fetch(`${import.meta.env.VITE_API_BASE}/blocks/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(blocksToUpdate)
+        });
+      }
+      if (songsToUpdate.length > 0) {
+        await fetch(`${import.meta.env.VITE_API_BASE}/songs/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(songsToUpdate)
+        });
+      }
+      fetchSongs();
+      fetchBlocks();
+    } catch (e) {
+      console.error('DnD reorder error:', e);
     }
   };
+
+  const handleCreateBlock = async () => {
+    const name = prompt('Enter Block/Set Name (e.g., Set 1 - Gustavo):');
+    if (!name) return;
+    await fetch(`${import.meta.env.VITE_API_BASE}/blocks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, name, sort_order: (blocks || []).length })
+    });
+    fetchBlocks();
+  };
+
+  const handleRenameBlock = async (id: number, oldName: string) => {
+    const name = prompt('New Block Name:', oldName);
+    if (!name || name === oldName) return;
+    await fetch(`${import.meta.env.VITE_API_BASE}/blocks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, sort_order: blocks.find(b => b.id === id)?.sort_order })
+    });
+    fetchBlocks();
+  };
+
+  const handleDeleteBlock = async (id: number) => {
+    if (!confirm('Delete this block? Songs inside will become Unassigned.')) return;
+    await fetch(`${import.meta.env.VITE_API_BASE}/blocks/${id}`, { method: 'DELETE' });
+    fetchBlocks();
+    fetchSongs();
+  };
+
+  if (!authorized) return null;
+
+  const currentUrl = window.location.origin;
 
 
   return (
@@ -304,13 +394,7 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-3xl font-bold text-purple-400">Lineup Dashboard</h2>
           <div className="flex gap-2">
-            <button                 onClick={toggleAll}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2"
-                title="Expand or collapse all bands"
-              >
-                {expandedArtists.size === sortedArtists.length && sortedArtists.length > 0 ? 'Collapse All Bands' : 'Expand All Bands'}
-              </button>
-              <button              onClick={() => {
+              <button onClick={() => {
                 const text = generateRosterGapsText(songs, selections, events.find(e => e.id === eventId));
                 if (text) {
                   setShareText(text);
@@ -351,109 +435,138 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
         <p className="text-gray-300">Assign musicians to their final lineup spots based on the volunteer roster for this event.</p>
       </div>
 
-      <div className="space-y-2">
-        {sortedArtists.map(artist => (
-          <div key={artist}>
-            <button
-              onClick={() => toggleArtist(artist)}
-              className="w-full text-left text-[18px] font-bold text-white border-b border-gray-700 pb-2 hover:text-purple-400 transition flex items-center gap-2 group py-2"
-            >
-              <span className="inline-block transform transition group-hover:translate-x-1">                                                                                    
-                {expandedArtists.has(artist) ? '▼' : '▶'}
-              </span>
-              {artist}
-            </button>
-            {expandedArtists.has(artist) && (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-gray-700 bg-gray-900">       
-                    <th className="text-left px-2 py-2 md:px-4 md:py-3 text-white font-bold text-xs md:text-sm w-1/4">Song</th>
-                    {ROLES.map(role => (
-                      <th key={role.id} className="text-left px-1 py-2 md:px-3 md:py-3 text-white font-bold text-[10px] md:text-xs">
-                        {role.label}
-                      </th>
-                    ))}
-                    <th className="text-center px-3 py-3 text-white font-bold text-sm">Actions</th>                                                                               
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedSongs[artist].map(song => {
-                    const lineup = lineups.find((l: any) => l.song_id === song.id) || {};                                                                              
-                    return (
-                      <tr key={song.id} className={`border-b border-gray-700 hover:bg-gray-800/50 transition ${selectedSongs.has(song.id) ? 'bg-red-900/20' : ''}`}>
-                        <td className="px-4 py-3">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedSongs.has(song.id)}
-                              onChange={(e) => {
-                                const newSet = new Set(selectedSongs);
-                                if (e.target.checked) newSet.add(song.id);
-                                else newSet.delete(song.id);
-                                setSelectedSongs(newSet);
-                              }}
-                              className="w-4 h-4 text-red-600 bg-gray-900 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
-                            />
-                            <p className="text-white font-semibold">{song.title}</p>
-                          </label>
-                        </td>
-                        {ROLES.map(role => {
-                          const volunteers = getVolunteers(song.id, role.id);   
-                          const selectedId = lineup[role.dbField] || '';        
+      <div className="flex gap-2 mb-4">
+        <button onClick={handleCreateBlock} className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded text-sm transition">
+          + New Block
+        </button>
+      </div>
 
-                          return (
-                            <td key={role.id} className="px-3 py-3">
-                              <div className="relative">
-                                <select
-                                  value={selectedId}
-                                  onChange={(e) => {
-                                    const val = e.target.value ? parseInt(e.target.value, 10) : null;                                                                                               
-                                    saveLineup(song.id, role.dbField, val);     
-                                  }}
-                                  className={`w-full bg-gray-800 border rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500 ${selectedId ? 'border-purple-500/50 text-white' : 'border-gray-700 text-gray-400'}`}                                                                          
-                                >
-                                  <option value="">-- Select --</option>        
-                                  {volunteers.map(v => (
-                                    <option key={v.musician_id} value={v.musician_id}>                                                                                                                
-                                      {v.musician_name}
-                                    </option>
-                                  ))}
-                                </select>
-                                {volunteers.length === 0 && (
-                                  <div className="text-xs text-purple-400 mt-1">0 volunteers</div>                                                                                                 
-                                )}
+      <div className="overflow-x-auto pb-20">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={activeItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b-2 border-gray-700 bg-gray-900">
+                  <th className="px-2 py-2 w-8"></th>
+                  <th className="text-left px-2 py-2 md:px-4 md:py-3 text-white font-bold text-xs md:text-sm">Band</th>
+                  <th className="text-left px-2 py-2 md:px-4 md:py-3 text-white font-bold text-xs md:text-sm w-1/4">Song</th>
+                  {ROLES.map(role => (
+                    <th key={role.id} className="text-left px-1 py-2 md:px-3 md:py-3 text-white font-bold text-[10px] md:text-xs">
+                      {role.label}
+                    </th>
+                  ))}
+                  <th className="text-center px-3 py-3 text-white font-bold text-sm">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeItems.map(item => {
+                  if (item.type === 'block') {
+                    const blockSongCount = item.data.id === 0
+                      ? songs.filter(s => !s.block_id).length
+                      : songs.filter(s => s.block_id === item.data.id).length;
+                    return (
+                      <SortableRow key={item.id} id={item.id} isBlock={true}>
+                        <td colSpan={ROLES.length + 4} className="px-4 py-3">
+                          <div className="flex justify-between items-center w-full">
+                            <h2 className="text-lg font-bold text-purple-400">
+                              {'≡ '}{item.data.name}{' '}
+                              <span className="text-gray-400 text-sm font-normal">({blockSongCount} songs)</span>
+                            </h2>
+                            {item.data.id !== 0 && (
+                              <div className="flex gap-2">
+                                <button
+                                  onPointerDown={(e) => { e.stopPropagation(); handleRenameBlock(item.data.id, item.data.name); }}
+                                  className="text-sm text-gray-400 hover:text-white px-2 cursor-pointer z-50 relative"
+                                >Rename</button>
+                                <button
+                                  onPointerDown={(e) => { e.stopPropagation(); handleDeleteBlock(item.data.id); }}
+                                  className="text-sm text-red-500 hover:text-red-400 px-2 cursor-pointer z-50 relative"
+                                >Delete</button>
                               </div>
-                            </td>
-                          );
-                        })}
-                        <td className="px-3 py-3 text-center">
-                          <div className="flex gap-2 justify-center">
-                            <button
-                              onClick={() => navigate(`/song-editor?songId=${song.id}`)}                                                                                                      
-                              className="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded text-sm font-semibold"                                                                    
-                              title="Edit song"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => deleteSong(song.id)}
-                              className="bg-purple-900 hover:bg-purple-800 text-white px-2 py-1 rounded text-sm font-semibold"                                                                      
-                              title="Delete song"
-                            >
-                              🗑️
-                            </button>
+                            )}
                           </div>
                         </td>
-                      </tr>
+                      </SortableRow>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            )}
-          </div>
-        ))}
+                  }
+
+                  const song = item.data;
+                  const lineup = lineups.find((l: any) => l.song_id === song.id) || {};
+
+                  return (
+                    <SortableRow key={item.id} id={item.id}>
+                      <td className="px-2 py-2 text-gray-500 cursor-grab">{'≡'}</td>
+                      <td className="px-2 py-2 md:px-4 md:py-3 text-gray-300 font-bold text-sm">{song.artist}</td>
+                      <td className="px-4 py-3">
+                        <label className="flex items-center gap-2 cursor-pointer" onPointerDown={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedSongs.has(song.id)}
+                            onChange={(e) => {
+                              const newSet = new Set(selectedSongs);
+                              if (e.target.checked) newSet.add(song.id);
+                              else newSet.delete(song.id);
+                              setSelectedSongs(newSet);
+                            }}
+                            className="w-4 h-4 text-red-600 bg-gray-900 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+                          />
+                          <p className="text-white font-semibold">{song.title}</p>
+                        </label>
+                      </td>
+                      {ROLES.map(role => {
+                        const volunteers = getVolunteers(song.id, role.id);
+                        const selectedId = lineup[role.dbField] || '';
+
+                        return (
+                          <td key={role.id} className="px-3 py-3" onPointerDown={e => e.stopPropagation()}>
+                            <div className="relative">
+                              <select
+                                value={selectedId}
+                                onChange={(e) => {
+                                  const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                                  saveLineup(song.id, role.dbField, val);
+                                }}
+                                className={`w-full bg-gray-800 border rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500 ${selectedId ? 'border-purple-500/50 text-white' : 'border-gray-700 text-gray-400'}`}
+                              >
+                                <option value="">-- Select --</option>
+                                {volunteers.map(v => (
+                                  <option key={v.musician_id} value={v.musician_id}>
+                                    {v.musician_name}
+                                  </option>
+                                ))}
+                              </select>
+                              {volunteers.length === 0 && (
+                                <div className="text-xs text-purple-400 mt-1">0 volunteers</div>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-3 text-center" onPointerDown={e => e.stopPropagation()}>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => navigate(`/song-editor?songId=${song.id}`)}
+                            className="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded text-sm font-semibold"
+                            title="Edit song"
+                          >
+                            {'✏️'}
+                          </button>
+                          <button
+                            onClick={() => deleteSong(song.id)}
+                            className="bg-purple-900 hover:bg-purple-800 text-white px-2 py-1 rounded text-sm font-semibold"
+                            title="Delete song"
+                          >
+                            {'🗑️'}
+                          </button>
+                        </div>
+                      </td>
+                    </SortableRow>
+                  );
+                })}
+              </tbody>
+            </table>
+          </SortableContext>
+        </DndContext>
       </div>
       </>
       )}

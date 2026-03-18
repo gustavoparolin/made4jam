@@ -42,13 +42,28 @@ CREATE TABLE IF NOT EXISTS `m4j_lineups` (
   `lead_guitar_id` int(11) DEFAULT NULL,
   `bass_id` int(11) DEFAULT NULL,
   `drums_id` int(11) DEFAULT NULL,
+  `extra_vocals_id` int(11) DEFAULT NULL,
+  `extra_guitar_id` int(11) DEFAULT NULL,
+  `extra_bass_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`song_id`),
   FOREIGN KEY (`song_id`) REFERENCES `m4j_songs`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`vocals_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`rhythm_guitar_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`lead_guitar_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`bass_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
-  FOREIGN KEY (`drums_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL
+  FOREIGN KEY (`drums_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`extra_vocals_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`extra_guitar_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`extra_bass_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `m4j_cover_bands` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `band_name` varchar(255) NOT NULL,
+  `musician_id` int(11) NOT NULL,
+  `role` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`musician_id`) REFERENCES `m4j_musicians`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Insert your default generic initialization data here

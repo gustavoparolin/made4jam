@@ -21,6 +21,15 @@ export interface Song {
   genre: string | null;
   lyrics?: string | null;
   reference_link: string | null;
+  sort_order?: number;
+  block_id?: number | null;
+}
+
+export interface Block {
+  id: number;
+  event_id: number;
+  name: string;
+  sort_order: number;
 }
 
 export interface Selection {
@@ -37,6 +46,7 @@ interface AppState {
   eventLocked: boolean;
   musician: Musician | null;
   songs: Song[];
+  blocks: Block[];
   selections: Selection[];
   viewMode: 'spacious' | 'compact';
 
@@ -47,6 +57,7 @@ interface AppState {
   setMusician: (musician: Musician) => void;
   logout: () => void;
   fetchSongs: () => Promise<void>;
+  fetchBlocks: () => Promise<void>;
   fetchSelections: () => Promise<void>;
   toggleSelection: (songId: number, role: string, checked: boolean) => Promise<void>;
   setViewMode: (mode: 'spacious' | 'compact') => void;
@@ -58,6 +69,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   eventLocked: localStorage.getItem('jam_eventLocked') === 'true',
   musician: null,
   songs: [],
+  blocks: [],
   selections: [],
   viewMode: (localStorage.getItem('viewMode') as 'spacious' | 'compact') || 'compact',
 
@@ -101,6 +113,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   logout: () => {
     localStorage.removeItem('jam_token');
     set({ musician: null });
+  },
+
+  fetchBlocks: async () => {
+    const { eventId } = get();
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE}/blocks?event_id=${eventId}`);
+      if (res.ok) {
+        const blocks = await res.json();
+        set({ blocks });
+      }
+    } catch (error) {
+      console.error('Failed to fetch blocks:', error);
+    }
   },
 
   fetchSongs: async () => {

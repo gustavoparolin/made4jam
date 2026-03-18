@@ -2,12 +2,18 @@
 
 This document outlines the planned features for the upcoming 2.0 release based on our brainstorming sessions.
 
-## 1. "Cover Band" Pre-fills & Reservations
-**Concept**: Allow full bands (e.g., Master of Justice, Chaos BC) to select all spots of a song song, occupying all instrument slots instantly without individuals having to click them one-by-one.
+## 1. "Cover Band" Pre-fills & Reservations ✅ (Completed in v1.3.0)
+**Concept**: Allow full bands (e.g., Master of Justice, Chaos BC) to select all spots of a song, occupying all instrument slots instantly without individuals having to click them one-by-one.
 **Selected Approach (Hybrid A/Admin-Assigned)**: 
 - Link a musician's name to a specific cover band function (e.g., "Patrick plays drums for Master of Justice", "Marley plays bass for Chaos BC").
 - The Admin can manage and make these assignments.
-- *Goal*: Keep it simple while allowing the admin to dynamically assign seats for known band groupings.
+- *Goal*: Keep it simple while allowing the admin to dynamically assign seats for known band groupings directly on a song-by-song basis.
+
+## 5. Bulk Lyrics Fetcher ✅ (Completed in v1.3.0)
+**Concept**: Easily fetch lyrics from the internet for all songs that are missing them.
+**Approach**:
+- Added a "🌐 Fetch Lyrics" button in the Admin Lineups Dashboard.
+- Scans all songs without lyrics and automatically queries the public LRCLIB API to ingest plain lyrics directly into the database.
 
 ## 2. WhatsApp "Roster Gaps" Export ✅ (Completed in v1.1.0/v1.1.1)
 **Concept**: A quick way to blast the current state of the jam to WhatsApp groups to encourage people to fill empty slots.

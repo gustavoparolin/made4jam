@@ -4,6 +4,7 @@ export default function AdminMusicians() {
   const [musicians, setMusicians] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
+  const [newName, setNewName] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchMusicians = async () => {
@@ -62,11 +63,46 @@ export default function AdminMusicians() {
     }
   };
 
+  const createMusician = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE}/musicians`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (res.ok) {
+        setNewName('');
+        fetchMusicians();
+      } else {
+        alert('Failed to create musician.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (loading) return <div className="text-white">Loading musicians...</div>;
 
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 text-white shadow-xl mt-6">
       <h2 className="text-2xl font-bold text-blue-400 mb-4">Manage Musicians</h2>
+
+      <form onSubmit={createMusician} className="mb-6 flex gap-2 w-full max-w-md">
+        <input 
+          type="text" 
+          value={newName} 
+          onChange={e => setNewName(e.target.value)} 
+          placeholder="New musician name..." 
+          className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white flex-1 focus:outline-none focus:border-blue-500"
+          required
+        />
+        <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-semibold transition">
+          Add
+        </button>
+      </form>
+
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>

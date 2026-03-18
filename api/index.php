@@ -30,6 +30,27 @@ function response($data, $status = 200) {
     exit;
 }
 
+// --- Self-healing: ensure m4j_blocks table and songs columns exist ---
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS m4j_blocks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        event_id INT NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    // Add block_id and sort_order to m4j_songs if missing
+    $cols = $pdo->query("SHOW COLUMNS FROM m4j_songs")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('block_id', $cols)) {
+        $pdo->exec("ALTER TABLE m4j_songs ADD COLUMN block_id INT DEFAULT NULL");
+    }
+    if (!in_array('sort_order', $cols)) {
+        $pdo->exec("ALTER TABLE m4j_songs ADD COLUMN sort_order INT DEFAULT 0");
+    }
+} catch (Exception $e) {
+    // Silently continue — table may already exist
+}
+
 try {
     // GET /test
     if ($method === 'GET' && $request === 'test') {
@@ -38,7 +59,7 @@ try {
     
     // GET /export
     elseif ($method === 'GET' && $request === 'export') {
-        $tables = ['m4j_events', 'm4j_musicians', 'm4j_songs', 'm4j_selections', 'm4j_lineups'];
+        $tables = ['m4j_events', 'm4j_musicians', 'm4j_songs', 'm4j_selections', 'm4j_lineups', 'm4j_blocks'];
         $sql = "-- Made4Jam Database Backup\n-- Date: " . date('Y-m-d H:i:s') . "\n\n";
         
         $sql .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
@@ -311,6 +332,67 @@ try {
         $stmt = $pdo->prepare("SELECT * FROM m4j_songs WHERE id = ?");
         $stmt->execute([$songId]);
         response($stmt->fetch());
+    }
+
+    // --- Block endpoints ---
+
+    // GET /blocks?event_id=X
+    elseif ($method === 'GET' && $request === 'blocks') {
+        $eventId = $_GET['event_id'] ?? null;
+        if (!$eventId) response(['error' => 'event_id is required'], 400);
+        $stmt = $pdo->prepare("SELECT * FROM m4j_blocks WHERE event_id = ? ORDER BY sort_order ASC");
+        $stmt->execute([$eventId]);
+        response($stmt->fetchAll());
+    }
+
+    // POST /blocks
+    elseif ($method === 'POST' && $request === 'blocks') {
+        $eventId = $input['event_id'] ?? null;
+        $name = $input['name'] ?? null;
+        $sortOrder = $input['sort_order'] ?? 0;
+        if (!$eventId || !$name) response(['error' => 'event_id and name are required'], 400);
+        $stmt = $pdo->prepare("INSERT INTO m4j_blocks (event_id, name, sort_order) VALUES (?, ?, ?)");
+        $stmt->execute([$eventId, $name, $sortOrder]);
+        response(['id' => $pdo->lastInsertId(), 'success' => true]);
+    }
+
+    // PUT /blocks/:id
+    elseif ($method === 'PUT' && preg_match('/^blocks\/(\d+)$/', $request, $matches)) {
+        $blockId = $matches[1];
+        $name = $input['name'] ?? null;
+        $sortOrder = $input['sort_order'] ?? null;
+        if (!$name) response(['error' => 'name is required'], 400);
+        $stmt = $pdo->prepare("UPDATE m4j_blocks SET name = ?, sort_order = ? WHERE id = ?");
+        $stmt->execute([$name, $sortOrder, $blockId]);
+        response(['success' => true]);
+    }
+
+    // DELETE /blocks/:id
+    elseif ($method === 'DELETE' && preg_match('/^blocks\/(\d+)$/', $request, $matches)) {
+        $blockId = $matches[1];
+        // Unassign songs from this block
+        $pdo->prepare("UPDATE m4j_songs SET block_id = NULL WHERE block_id = ?")->execute([$blockId]);
+        $stmt = $pdo->prepare("DELETE FROM m4j_blocks WHERE id = ?");
+        $stmt->execute([$blockId]);
+        response(['success' => true]);
+    }
+
+    // POST /blocks/reorder
+    elseif ($method === 'POST' && $request === 'blocks/reorder') {
+        $stmt = $pdo->prepare("UPDATE m4j_blocks SET sort_order = ? WHERE id = ?");
+        foreach ($input as $item) {
+            $stmt->execute([$item['sort_order'], $item['id']]);
+        }
+        response(['success' => true]);
+    }
+
+    // POST /songs/reorder
+    elseif ($method === 'POST' && $request === 'songs/reorder') {
+        $stmt = $pdo->prepare("UPDATE m4j_songs SET sort_order = ?, block_id = ? WHERE id = ?");
+        foreach ($input as $item) {
+            $stmt->execute([$item['sort_order'], $item['block_id'], $item['id']]);
+        }
+        response(['success' => true]);
     }
 
     // Default 404

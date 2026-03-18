@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-03-17
+### Added
+- **Bulk Lyrics Fetching**: Added a "🌐 Fetch Lyrics" button in the Admin Lineup Dashboard. Automatically fetches plain text lyrics from the internet (LRCLIB API) for every song in the database that is currently missing them.
+- **Cover Band Management System**: Added "Manage Cover Bands" tab in Admin to associate musicians with default cover bands.
+- **Song-by-Song Cover Band Pre-fills**: Added a "🎸 Fill..." dropdown directly beneath each song to rapidly auto-assign cover band members to their missing instruments without destructive overwrites.
+
 ## [1.2.0] - 2026-03-15
 ### Added
 - **Unplayable Songs Filter**: Added a "🔍 Select Unplayable" button in the Admin Lineup Dashboard to automatically select songs missing critical instruments (no drummer, no bass, or no guitars).
