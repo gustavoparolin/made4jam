@@ -265,11 +265,12 @@ export default function Admin() {
     };
 
     members.forEach((m: any) => {
-      if (m.role === 'vocals' && !payload.vocalsId) payload.vocalsId = m.musician_id;
-      else if (m.role === 'rhythm_guitar' && !payload.rhythmGuitarId) payload.rhythmGuitarId = m.musician_id;
-      else if (m.role === 'lead_guitar' && !payload.leadGuitarId) payload.leadGuitarId = m.musician_id;
-      else if (m.role === 'bass' && !payload.bassId) payload.bassId = m.musician_id;
-      else if (m.role === 'drums' && !payload.drumsId) payload.drumsId = m.musician_id;
+      const hasVolunteers = getVolunteers(songId, m.role).length > 0;
+      if (m.role === 'vocals' && !payload.vocalsId && !hasVolunteers) payload.vocalsId = m.musician_id;
+      else if (m.role === 'rhythm_guitar' && !payload.rhythmGuitarId && !hasVolunteers) payload.rhythmGuitarId = m.musician_id;
+      else if (m.role === 'lead_guitar' && !payload.leadGuitarId && !hasVolunteers) payload.leadGuitarId = m.musician_id;
+      else if (m.role === 'bass' && !payload.bassId && !hasVolunteers) payload.bassId = m.musician_id;
+      else if (m.role === 'drums' && !payload.drumsId && !hasVolunteers) payload.drumsId = m.musician_id;
     });
 
     try {
