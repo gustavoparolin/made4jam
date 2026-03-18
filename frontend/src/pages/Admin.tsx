@@ -789,6 +789,9 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
                       {ROLES.map(role => {
                         const volunteers = getVolunteers(song.id, role.id);
                         const selectedId = lineup[role.dbField] || '';
+                        const selectedName = lineup[role.dbField.replace('_id', '_name')] || null;
+                        // Musician was assigned (e.g. via prefill) but never volunteered — still show their name
+                        const assignedNotInList = selectedId && !volunteers.some((v: any) => String(v.musician_id) === String(selectedId));
 
                         return (
                           <td key={role.id} className="px-3 py-3" onPointerDown={e => e.stopPropagation()}>
@@ -802,13 +805,16 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
                                 className={`w-full bg-gray-800 border rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500 ${selectedId ? 'border-purple-500/50 text-white' : 'border-gray-700 text-gray-400'}`}
                               >
                                 <option value="">-- Select --</option>
-                                {volunteers.map(v => (
+                                {assignedNotInList && (
+                                  <option value={selectedId}>{selectedName ?? `#${selectedId}`}</option>
+                                )}
+                                {volunteers.map((v: any) => (
                                   <option key={v.musician_id} value={v.musician_id}>
                                     {v.musician_name}
                                   </option>
                                 ))}
                               </select>
-                              {volunteers.length === 0 && (
+                              {volunteers.length === 0 && !selectedId && (
                                 <div className="text-xs text-purple-400 mt-1">0 volunteers</div>
                               )}
                             </div>
