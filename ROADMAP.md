@@ -38,6 +38,16 @@ This document outlines the planned features for the upcoming 2.0 release based o
   3. Tuning/Artist (Priority 3)
 - We will leverage AI dynamically when necessary to assist the admin with sorting the perfect show progression.
 
+
+## 6. DND Setlist Blocks ✅ (Completed in v1.4.0)
+**Concept**: Implement drag-and-drop functionality to reorganize the Setlist order using native HTML5 drag operations with the `@dnd-kit` library.
+
+**Implementation**:
+- ✅ Database: `m4j_blocks` table with self-healing schema creation.
+- ✅ Backend API: Full CRUD + reorder endpoints for blocks and songs in `api/index.php`.
+- ✅ Global State: `blocks: Block[]` and `fetchBlocks()` in `useAppStore.ts`.
+- ✅ Drag-and-Drop: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` with `SortableRow.tsx` wrapper.
+- ✅ UI: `DndContext` + `SortableContext` in `Admin.tsx` with flat `activeItems` array merging blocks and songs. Block create/rename/delete, persistent sort order.
 ---
 
 *Note: As we complete these features, we will bump minor/major versions respectively and document them in our `CHANGELOG.md`.*
