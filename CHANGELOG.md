@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-03-17
+### Added
+- **Pre-commit hook**: Git hook at `hooks/pre-commit` that blocks every commit unless `CHANGELOG.md` is staged. Install with `cp hooks/pre-commit .git/hooks/pre-commit`. Bypass in emergencies with `git commit --no-verify`.
+
 ## [1.9.0] - 2026-03-17
 ### Added
 - **Cumulative Block Dashboard**: New "📊 Dashboard" tab in Admin shows musician and band play counts accumulated block by block. Each collapsible section covers Block 1 up to that point. Inline bar charts visualise relative load. Amber highlight = musician not yet playing; red highlight = musician in >70% of cumulative songs (overplaying threshold). Reactive to lineup changes without page reload.

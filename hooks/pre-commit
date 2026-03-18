@@ -1,0 +1,17 @@
+#!/bin/sh
+# Blocks commits where CHANGELOG.md was not staged.
+# Bypass only in emergencies: git commit --no-verify
+
+if git diff --cached --name-only | grep -q "CHANGELOG.md"; then
+  exit 0
+fi
+
+echo ""
+echo "COMMIT BLOCKED: CHANGELOG.md was not updated."
+echo ""
+echo "  Every commit requires a CHANGELOG.md entry."
+echo "  Add your entry, stage the file, then commit again."
+echo ""
+echo "  Emergency bypass: git commit --no-verify"
+echo ""
+exit 1
