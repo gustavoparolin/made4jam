@@ -1,10 +1,14 @@
 /**
  * AI / Algorithmic Setlist Assistant
  *
- * Groups songs into blocks by drummer, places cover band songs first within
- * each group, minimizes instrument swaps within each block (greedy nearest-
- * neighbour), splits oversized groups into multiple blocks, then interleaves
- * blocks across drummers so no two consecutive blocks share the same drummer.
+ * Block naming: each cover band's designated drummer "owns" a block group.
+ * All songs played by that drummer go into that cover band's named block(s).
+ * Within each block, songs where ALL cover band members are present come
+ * first; remaining songs (same drummer, different members) follow, ordered
+ * by greedy nearest-neighbour to minimise instrument swaps.
+ *
+ * Blocks are round-robin interleaved across drummer groups so no two
+ * consecutive blocks share the same drummer.
  */
 
 export interface LineupRow {
@@ -66,11 +70,12 @@ export function generateSetlist(opts: {
 
   const lineupMap = new Map<number, LineupRow>(lineups.map(l => [l.song_id, l]));
 
-  // Build cover band roster: bandName → Map<role, Set<musicianId>>
   const bandRosters = buildBandRosters(coverBands);
+  // Map drummer musician_id → cover band name they represent
+  const drummerToCoverBand = buildDrummerToCoverBand(coverBands);
 
   // ── Step 1: Group songs by drummer ──────────────────────────────────────
-  const drummerGroups = new Map<number | null, number[]>(); // drummer_id → songIds
+  const drummerGroups = new Map<number | null, number[]>();
 
   for (const songId of songIds) {
     const lineup = lineupMap.get(songId);
@@ -82,47 +87,46 @@ export function generateSetlist(opts: {
   const unassignedIds = drummerGroups.get(null) ?? [];
   drummerGroups.delete(null);
 
-  // ── Step 2 & 3: For each drummer group, tag cover-band songs then sort ──
-  const drummerBlockLists: ProposedBlock[][] = [];
+  // ── Steps 2-5: Sort and split each drummer group into named blocks ───────
+  const drummerBlockLists: NamedBlock[][] = [];
 
   for (const [drummerId, groupSongIds] of drummerGroups) {
+    // Block label = cover band name if this drummer represents one, else drummer name
+    const coverBandName = drummerToCoverBand.get(drummerId!) ?? null;
     const drummerName = musicians.find(m => m.id === drummerId)?.name ?? `Drummer ${drummerId}`;
+    const blockLabel = coverBandName ?? drummerName;
 
-    // Tag each song with its best matching cover band (if any)
-    const tagged = groupSongIds.map(id => ({
-      id,
-      coverBand: detectCoverBand(id, lineupMap.get(id) ?? null, bandRosters),
-    }));
+    // Split into full-CB songs (all members match) vs mixed songs
+    let fullCBSongIds: number[] = [];
+    let mixedSongIds: number[] = [];
 
-    const coverBandSongs = tagged.filter(t => t.coverBand !== null);
-    const mixedSongs = tagged.filter(t => t.coverBand === null);
-
-    // Group cover-band songs by band name so same-band songs are together
-    const cbByBand = new Map<string, number[]>();
-    for (const t of coverBandSongs) {
-      if (!cbByBand.has(t.coverBand!)) cbByBand.set(t.coverBand!, []);
-      cbByBand.get(t.coverBand!)!.push(t.id);
+    if (coverBandName) {
+      const roster = bandRosters.get(coverBandName)!;
+      for (const songId of groupSongIds) {
+        if (isFullCoverBandSong(lineupMap.get(songId) ?? null, roster)) {
+          fullCBSongIds.push(songId);
+        } else {
+          mixedSongIds.push(songId);
+        }
+      }
+    } else {
+      mixedSongIds = [...groupSongIds];
     }
 
-    // Cover band songs ordered by band (largest group first)
-    const orderedCB: number[] = [];
-    const sortedBands = [...cbByBand.entries()].sort((a, b) => b[1].length - a[1].length);
-    for (const [, ids] of sortedBands) orderedCB.push(...ids);
-
-    // Mixed songs: greedy nearest-neighbour starting from the last cover-band song
+    // Greedy nearest-neighbour for mixed songs, starting from last full-CB song
     const orderedMixed = greedyOrder(
-      mixedSongs.map(t => t.id),
+      mixedSongIds,
       lineupMap,
-      orderedCB.length > 0 ? orderedCB[orderedCB.length - 1] : null,
+      fullCBSongIds.length > 0 ? fullCBSongIds[fullCBSongIds.length - 1] : null,
     );
 
-    const allOrdered = [...orderedCB, ...orderedMixed];
+    const allOrdered = [...fullCBSongIds, ...orderedMixed];
 
-    // ── Step 4: Split into blocks of maxBlockSize ─────────────────────────
-    const subBlocks = chunkIntoBlocks(allOrdered, maxBlockSize, orderedCB.length, cbByBand);
-    const blockNames = nameBlocks(subBlocks, sortedBands.map(([name]) => name), drummerName);
+    // Split into blocks of maxBlockSize, all carrying the same label
+    const chunks = chunkArray(allOrdered, maxBlockSize);
+    const namedBlocks: NamedBlock[] = chunks.map(chunk => ({ name: blockLabel, songIds: chunk.songIds }));
 
-    drummerBlockLists.push(blockNames);
+    drummerBlockLists.push(namedBlocks);
   }
 
   // ── Step 6: Interleave blocks across drummers ────────────────────────────
@@ -159,35 +163,38 @@ function buildBandRosters(coverBands: CoverBandMember[]): BandRosters {
   return rosters;
 }
 
-const ROLES_TO_CHECK: Array<keyof LineupRow> = [
-  'vocals_id', 'rhythm_guitar_id', 'lead_guitar_id', 'bass_id', 'drums_id',
+/** Returns a map of drummer musician_id → the cover band they represent. */
+function buildDrummerToCoverBand(coverBands: CoverBandMember[]): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const m of coverBands) {
+    if (m.role === 'drums') map.set(m.musician_id, m.band_name);
+  }
+  return map;
+}
+
+const NON_DRUM_ROLES: Array<[string, keyof LineupRow]> = [
+  ['vocals', 'vocals_id'],
+  ['rhythm_guitar', 'rhythm_guitar_id'],
+  ['lead_guitar', 'lead_guitar_id'],
+  ['bass', 'bass_id'],
 ];
 
-function detectCoverBand(
-  _songId: number,
+/**
+ * Returns true if every non-drummer slot that the cover band has defined
+ * is filled with the corresponding cover band member in this song's lineup.
+ */
+function isFullCoverBandSong(
   lineup: LineupRow | null,
-  bandRosters: BandRosters,
-): string | null {
-  if (!lineup) return null;
-
-  let bestBand: string | null = null;
-  let bestMatches = 0;
-
-  for (const [bandName, byRole] of bandRosters) {
-    let matches = 0;
-    for (const field of ROLES_TO_CHECK) {
-      const musicianId = lineup[field] as number | null;
-      if (!musicianId) continue;
-      const roleKey = field.replace('_id', '') as string;
-      if (byRole.get(roleKey)?.has(musicianId)) matches++;
-    }
-    if (matches >= 3 && matches > bestMatches) {
-      bestMatches = matches;
-      bestBand = bandName;
-    }
+  roster: Map<string, Set<number>>,
+): boolean {
+  if (!lineup) return false;
+  for (const [role, field] of NON_DRUM_ROLES) {
+    const rosterMembers = roster.get(role);
+    if (!rosterMembers || rosterMembers.size === 0) continue;
+    const musicianId = lineup[field] as number | null;
+    if (!musicianId || !rosterMembers.has(musicianId)) return false;
   }
-
-  return bestBand;
+  return true;
 }
 
 /** Count lineup members that differ between two songs (excluding drummer). */
@@ -245,40 +252,12 @@ function greedyOrder(
 
 interface NamedBlock { name: string; songIds: number[] }
 
-/**
- * Splits an ordered song list into chunks of maxBlockSize.
- * Cover-band songs appear at the start of the first sub-block; subsequent
- * sub-blocks for the same drummer begin with whatever is next.
- */
-function chunkIntoBlocks(
-  orderedIds: number[],
-  maxBlockSize: number,
-  _coverBandCount: number,
-  _cbByBand: Map<string, number[]>,
-): Array<{ songIds: number[] }> {
+function chunkArray(ids: number[], size: number): Array<{ songIds: number[] }> {
   const chunks: Array<{ songIds: number[] }> = [];
-  for (let i = 0; i < orderedIds.length; i += maxBlockSize) {
-    chunks.push({ songIds: orderedIds.slice(i, i + maxBlockSize) });
+  for (let i = 0; i < ids.length; i += size) {
+    chunks.push({ songIds: ids.slice(i, i + size) });
   }
   return chunks;
-}
-
-/**
- * Assigns names to the sub-blocks for a single drummer group.
- * First sub-block: named after the leading cover band (if any), else drummer.
- * Subsequent sub-blocks: drummer name.
- */
-function nameBlocks(
-  chunks: Array<{ songIds: number[] }>,
-  sortedBandNames: string[],
-  drummerName: string,
-): NamedBlock[] {
-  return chunks.map((chunk, i) => {
-    const name = i === 0 && sortedBandNames.length > 0
-      ? sortedBandNames[0]
-      : drummerName;
-    return { name, songIds: chunk.songIds };
-  });
 }
 
 /**

@@ -129,14 +129,15 @@ describe('generateSetlist — drummer grouping', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateSetlist — cover band priority', () => {
-  it('cover-band songs appear before mixed songs within the same block', () => {
-    // Songs 1 & 2: full Chaos BC lineup (cover band match ≥3 members)
-    // Song 3: Hugo drums but different bass → mixed
+  it('full-CB songs appear before mixed songs within the same block', () => {
+    // Songs 1 & 2: full Chaos BC lineup (all 5 CB members present)
+    // Song 3: Hugo drums + Tomas/Andreas/Chris but Rob bass (≠ Marley) → mixed
+    // Song 4: Hugo drums + Rob bass only → mixed
     const lineups: LineupRow[] = [
-      makeLineup(1, 1, 5, 3, 4, 7), // Chaos BC (all 5 match)
-      makeLineup(2, 1, 5, 3, 4, 7), // Chaos BC
-      makeLineup(3, 1, 6, 3, 4, 7), // Hugo drums, Rob bass (4 match Chaos BC: still ≥3 → cover band)
-      makeLineup(4, 1, 6, null, null, null), // Hugo drums, Rob bass, no guitars → 2 matches, mixed
+      makeLineup(1, 1, 5, 3, 4, 7), // full Chaos BC
+      makeLineup(2, 1, 5, 3, 4, 7), // full Chaos BC
+      makeLineup(3, 1, 6, 3, 4, 7), // Hugo drums, Rob bass (bass ≠ Marley → mixed)
+      makeLineup(4, 1, 6, null, null, null), // Hugo drums, Rob bass only → mixed
     ];
 
     const plan = generateSetlist({
@@ -147,11 +148,11 @@ describe('generateSetlist — cover band priority', () => {
       maxBlockSize: 6,
     });
 
-    // All songs go into one block (Hugo). Cover-band songs should come first.
-    const hugoBlock = plan.blocks.find(b => b.name.includes('Chaos BC') || b.name.includes('Hugo'));
+    // Hugo is Chaos BC drummer → block is always named Chaos BC
+    const hugoBlock = plan.blocks.find(b => b.name.includes('Chaos BC'));
     expect(hugoBlock).toBeDefined();
 
-    // Song 4 (only 2 CB matches) must come after songs 1, 2, 3 (≥3 CB matches)
+    // Songs 1 & 2 are full CB → come first. Song 4 (sparsest) must come last.
     const idx4 = hugoBlock!.songIds.indexOf(4);
     const idx1 = hugoBlock!.songIds.indexOf(1);
     const idx2 = hugoBlock!.songIds.indexOf(2);
@@ -293,9 +294,11 @@ describe('generateSetlist — block naming', () => {
     expect(block.name).toContain('Chaos BC');
   });
 
-  it("names the block after the drummer when no cover band songs exist", () => {
+  it('names the block after the cover band even when song lineup is not a full CB match', () => {
+    // Hugo (id:1) is Chaos BC drummer → block is always named Chaos BC,
+    // even though Rob bass ≠ Marley (not a full-CB song)
     const lineups: LineupRow[] = [
-      makeLineup(1, 1, 6, null, null, null), // Hugo drums, Rob bass — only 2 CB matches
+      makeLineup(1, 1, 6, null, null, null), // Hugo drums, Rob bass only
     ];
 
     const plan = generateSetlist({
@@ -307,7 +310,25 @@ describe('generateSetlist — block naming', () => {
     });
 
     const block = plan.blocks[0];
-    expect(block.name).toContain('Hugo');
+    expect(block.name).toContain('Chaos BC');
+  });
+
+  it('names the block after the drummer when the drummer has no cover band', () => {
+    // Marco (id:2) is not in any cover band → block named after Marco
+    const lineups: LineupRow[] = [
+      makeLineup(1, 2, 6, null, null, null), // Marco drums, Rob bass
+    ];
+
+    const plan = generateSetlist({
+      songIds: [1],
+      lineups,
+      coverBands,
+      musicians,
+      maxBlockSize: 6,
+    });
+
+    const block = plan.blocks[0];
+    expect(block.name).toContain('Marco');
   });
 
   it('prefixes every block name with "Set N -"', () => {
