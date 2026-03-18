@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
@@ -9,6 +9,7 @@ import AdminEvents from './AdminEvents';
 import AdminCoverBands from './AdminCoverBands';
 import { formatDate } from '../utils';
 import { generateRosterGapsText } from '../utils/whatsapp';
+import { generateSetlist, suggestBlockSize } from '../utils/setlistAlgorithm';
 
 const ROLES = [
   { id: 'vocals', dbField: 'vocals_id', label: 'Vocals' },
@@ -30,6 +31,8 @@ export default function Admin() {
   const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set());
   const [fetchingLyrics, setFetchingLyrics] = useState(false);
   const [coverBands, setCoverBands] = useState<any[]>([]);
+  const [aiToast, setAiToast] = useState<string | null>(null);
+  const undoSnapshotRef = useRef<{ blocks: any[]; songAssignments: Array<{ id: number; block_id: number | null; sort_order: number }> } | null>(null);
 
   const deleteSong = async (songId: number) => {
     if (!confirm('Are you sure you want to delete this song?')) return;
@@ -87,6 +90,163 @@ export default function Admin() {
       if (res.ok) setCoverBands(await res.json());
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const runAiSetlist = async () => {
+    const songsWithLineups = songs.filter(s => lineups.some((l: any) => l.song_id === s.id));
+    if (songsWithLineups.length === 0) {
+      alert('No songs with assigned lineups found. Assign lineups first.');
+      return;
+    }
+
+    const drummerIds = new Set(
+      lineups.map((l: any) => l.drums_id).filter(Boolean)
+    );
+    const suggested = suggestBlockSize(songs.length, drummerIds.size);
+    const input = prompt(
+      `AI Setlist Assistant\n\nGroups songs by drummer, places cover band songs first, and minimises instrument swaps.\n\nMax songs per block (suggested: ${suggested}):`,
+      String(suggested)
+    );
+    if (input === null) return;
+    const maxBlockSize = Math.max(1, parseInt(input, 10) || suggested);
+
+    // Snapshot current state for undo
+    undoSnapshotRef.current = {
+      blocks: blocks.map(b => ({ ...b })),
+      songAssignments: songs.map(s => ({ id: s.id, block_id: s.block_id ?? null, sort_order: s.sort_order ?? 0 })),
+    };
+
+    const plan = generateSetlist({
+      songIds: songs.map(s => s.id),
+      lineups: lineups.map((l: any) => ({
+        song_id: l.song_id,
+        drums_id: l.drums_id ?? null,
+        bass_id: l.bass_id ?? null,
+        rhythm_guitar_id: l.rhythm_guitar_id ?? null,
+        lead_guitar_id: l.lead_guitar_id ?? null,
+        vocals_id: l.vocals_id ?? null,
+      })),
+      coverBands: coverBands.map((cb: any) => ({
+        band_name: cb.band_name,
+        musician_id: cb.musician_id,
+        role: cb.role,
+      })),
+      musicians: [
+        ...new Map(
+          lineups
+            .filter((l: any) => l.drums_id && l.drums_name)
+            .map((l: any) => [l.drums_id, { id: l.drums_id, name: l.drums_name }])
+        ).values(),
+      ],
+      maxBlockSize,
+    });
+
+    try {
+      // Delete existing blocks
+      await Promise.all(
+        blocks.map(b =>
+          fetch(`${import.meta.env.VITE_API_BASE}/blocks/${b.id}`, { method: 'DELETE' })
+        )
+      );
+
+      // Create new blocks and collect {name → id} mapping
+      const dataBlocks = plan.blocks.filter(b => b.name !== 'Unassigned Songs');
+      const createdBlocks: Array<{ id: number; name: string }> = [];
+      for (let i = 0; i < dataBlocks.length; i++) {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE}/blocks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId, name: dataBlocks[i].name, sort_order: i }),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          createdBlocks.push({ id: created.id, name: dataBlocks[i].name });
+        }
+      }
+
+      // Build song assignments
+      const songUpdates: Array<{ id: number; sort_order: number; block_id: number | null }> = [];
+      for (let bi = 0; bi < dataBlocks.length; bi++) {
+        const blockId = createdBlocks[bi]?.id ?? null;
+        dataBlocks[bi].songIds.forEach((songId, si) => {
+          songUpdates.push({ id: songId, sort_order: si, block_id: blockId });
+        });
+      }
+      const unassignedBlock = plan.blocks.find(b => b.name === 'Unassigned Songs');
+      if (unassignedBlock) {
+        unassignedBlock.songIds.forEach((songId, si) => {
+          songUpdates.push({ id: songId, sort_order: si, block_id: null });
+        });
+      }
+
+      if (songUpdates.length > 0) {
+        await fetch(`${import.meta.env.VITE_API_BASE}/songs/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(songUpdates),
+        });
+      }
+
+      await fetchBlocks();
+      await fetchSongs();
+      setAiToast(`✅ Setlist reorganised into ${dataBlocks.length} block(s).`);
+      setTimeout(() => setAiToast(null), 8000);
+    } catch (e) {
+      console.error('AI Setlist error:', e);
+      alert('Something went wrong applying the AI setlist. Check console.');
+    }
+  };
+
+  const undoAiSetlist = async () => {
+    const snap = undoSnapshotRef.current;
+    if (!snap) return;
+
+    try {
+      // Delete all current blocks
+      const currentBlocks = await fetch(`${import.meta.env.VITE_API_BASE}/blocks?event_id=${eventId}`);
+      const currentBlockData = currentBlocks.ok ? await currentBlocks.json() : [];
+      await Promise.all(
+        currentBlockData.map((b: any) =>
+          fetch(`${import.meta.env.VITE_API_BASE}/blocks/${b.id}`, { method: 'DELETE' })
+        )
+      );
+
+      // Recreate snapshot blocks
+      const idMap = new Map<number, number>(); // old id → new id
+      for (const b of snap.blocks) {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE}/blocks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: eventId, name: b.name, sort_order: b.sort_order }),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          idMap.set(b.id, created.id);
+        }
+      }
+
+      // Restore song assignments
+      const songUpdates = snap.songAssignments.map(s => ({
+        id: s.id,
+        sort_order: s.sort_order,
+        block_id: s.block_id !== null ? (idMap.get(s.block_id) ?? null) : null,
+      }));
+      if (songUpdates.length > 0) {
+        await fetch(`${import.meta.env.VITE_API_BASE}/songs/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(songUpdates),
+        });
+      }
+
+      undoSnapshotRef.current = null;
+      await fetchBlocks();
+      await fetchSongs();
+      setAiToast(null);
+    } catch (e) {
+      console.error('Undo error:', e);
+      alert('Undo failed. Check console.');
     }
   };
 
@@ -526,6 +686,14 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
             >
               {fetchingLyrics ? '⏳ Fetching...' : '🌐 Fetch Lyrics'}
             </button>
+            <button
+              onClick={runAiSetlist}
+              disabled={songs.length === 0 || lineups.length === 0}
+              className="bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2 disabled:opacity-50"
+              title="Auto-sort setlist by drummer, minimising swap time between songs"
+            >
+              🤖 AI Setlist
+            </button>
             {selectedSongs.size > 0 && (
               <button
                 onClick={deleteSelectedSongs}
@@ -692,6 +860,25 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
         </DndContext>
       </div>
       </>
+      )}
+
+      {aiToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-indigo-900 border border-indigo-500 text-white px-5 py-3 rounded-lg shadow-2xl text-sm font-semibold">
+          <span>{aiToast}</span>
+          <button
+            onClick={undoAiSetlist}
+            className="underline text-indigo-300 hover:text-white transition"
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => setAiToast(null)}
+            className="ml-2 text-indigo-400 hover:text-white transition"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {shareText && (

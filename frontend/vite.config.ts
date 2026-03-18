@@ -5,6 +5,9 @@ import pkg from './package.json'
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => ({
+  test: {
+    environment: 'node',
+  },
   base: mode === 'production' ? '/made4jam/' : '/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version)
