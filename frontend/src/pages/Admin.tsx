@@ -27,6 +27,7 @@ export default function Admin() {
   const [lineups, setLineups] = useState<any[]>([]);
   const [shareText, setShareText] = useState<string | null>(null);
   const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set());
+  const [fetchingLyrics, setFetchingLyrics] = useState(false);
 
   const deleteSong = async (songId: number) => {
     if (!confirm('Are you sure you want to delete this song?')) return;
@@ -204,6 +205,49 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
     } catch (e) {
       console.error('Error deleting multiple songs', e);
     }
+  };
+
+  const fetchAllLyrics = async () => {
+    const songsWithoutLyrics = songs.filter(s => !s.lyrics);
+    if (songsWithoutLyrics.length === 0) {
+      alert('All songs already have lyrics!');
+      return;
+    }
+    if (!confirm(`Fetch lyrics for ${songsWithoutLyrics.length} song(s) from LRCLIB?`)) return;
+
+    setFetchingLyrics(true);
+    let found = 0;
+    let failed = 0;
+
+    for (const song of songsWithoutLyrics) {
+      try {
+        const params = new URLSearchParams({ track_name: song.title, artist_name: song.artist });
+        const res = await fetch(`https://lrclib.net/api/search?${params}`);
+        if (res.ok) {
+          const results = await res.json();
+          const match = results[0];
+          if (match && (match.plainLyrics || match.syncedLyrics)) {
+            const lyrics = match.plainLyrics || match.syncedLyrics;
+            await fetch(`${import.meta.env.VITE_API_BASE}/songs/${song.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: song.title, artist: song.artist, genre: song.genre, lyrics })
+            });
+            found++;
+          } else {
+            failed++;
+          }
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    setFetchingLyrics(false);
+    fetchSongs();
+    alert(`Lyrics fetch complete!\n✅ Found: ${found}\n❌ Not found: ${failed}`);
   };
 
   // --- DnD Flat Items ---
@@ -420,6 +464,14 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
               title="Select songs without drummer, or missing both bass and guitar"
             >
               🔍 Select Unplayable
+            </button>
+            <button
+              onClick={fetchAllLyrics}
+              disabled={fetchingLyrics}
+              className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold transition flex items-center gap-2 disabled:opacity-50"
+              title="Fetch lyrics from LRCLIB for all songs without lyrics"
+            >
+              {fetchingLyrics ? '⏳ Fetching...' : '🌐 Fetch Lyrics'}
             </button>
             {selectedSongs.size > 0 && (
               <button
