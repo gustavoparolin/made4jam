@@ -51,6 +51,19 @@ try {
     // Silently continue — table may already exist
 }
 
+// --- Self-healing: ensure m4j_cover_bands table exists ---
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS m4j_cover_bands (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        band_name VARCHAR(255) NOT NULL,
+        musician_id INT NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+} catch (Exception $e) {
+    // Silently continue
+}
+
 try {
     // GET /test
     if ($method === 'GET' && $request === 'test') {
@@ -392,6 +405,34 @@ try {
         foreach ($input as $item) {
             $stmt->execute([$item['sort_order'], $item['block_id'], $item['id']]);
         }
+        response(['success' => true]);
+    }
+
+    // GET /cover-bands
+    elseif ($method === 'GET' && $request === 'cover-bands') {
+        $stmt = $pdo->query("SELECT cb.*, m.name AS musician_name FROM m4j_cover_bands cb LEFT JOIN m4j_musicians m ON cb.musician_id = m.id ORDER BY cb.band_name, cb.role");
+        response($stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    // POST /cover-bands
+    elseif ($method === 'POST' && $request === 'cover-bands') {
+        $band_name = $input['band_name'] ?? null;
+        $musician_id = $input['musician_id'] ?? null;
+        $role = $input['role'] ?? null;
+        if (!$band_name || !$musician_id || !$role) {
+            response(['error' => 'band_name, musician_id, and role are required'], 400);
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO m4j_cover_bands (band_name, musician_id, role) VALUES (?, ?, ?)");
+            $stmt->execute([$band_name, $musician_id, $role]);
+            response(['id' => $pdo->lastInsertId()], 201);
+        }
+    }
+
+    // DELETE /cover-bands/:id
+    elseif ($method === 'DELETE' && preg_match('/^cover-bands\/(\d+)$/', $request, $matches)) {
+        $id = intval($matches[1]);
+        $stmt = $pdo->prepare("DELETE FROM m4j_cover_bands WHERE id = ?");
+        $stmt->execute([$id]);
         response(['success' => true]);
     }
 
