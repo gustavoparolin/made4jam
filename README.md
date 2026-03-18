@@ -214,3 +214,4 @@ That's it!
 * **Multi-Environment Ready:** Dynamically switches database credentials via \.env\ injection depending on whether it's executing on \localhost\ mapped to a WAMP environment, or running live on a standard cPanel Linux host.
 
 
+test

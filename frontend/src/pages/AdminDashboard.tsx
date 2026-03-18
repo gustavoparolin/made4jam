@@ -58,12 +58,16 @@ function computeSections(
 
       const lp = lineupMap.get(song.id);
       if (lp) {
+        // Deduplicate: count each musician once per song, even if they fill multiple roles
+        const seenInSong = new Set<number>();
         for (const field of LINEUP_ROLE_FIELDS) {
           const mid = lp[field];
           if (mid != null) {
-            const numId = Number(mid);
-            cumMusicianCounts.set(numId, (cumMusicianCounts.get(numId) || 0) + 1);
+            seenInSong.add(Number(mid));
           }
+        }
+        for (const numId of seenInSong) {
+          cumMusicianCounts.set(numId, (cumMusicianCounts.get(numId) || 0) + 1);
         }
       }
     }
