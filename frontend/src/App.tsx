@@ -15,7 +15,7 @@ function App() {
   return (
     <div className="flex flex-col min-h-screen">
       <header className="bg-gray-800 border-b border-gray-700 p-4 shadow-md print:hidden">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
+        <div className="mx-auto w-full flex justify-between items-center">
             <Link to="/" className="flex items-center">
               <img src={logoUrl} alt="Made4Jam Logo" className="h-10 w-auto" />
             </Link>
@@ -63,7 +63,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-grow max-w-6xl mx-auto w-full p-4 md:p-6">
+      <main className="flex-grow w-full p-4 md:p-6">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/jam" element={<Jam />} />

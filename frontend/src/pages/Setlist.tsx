@@ -63,7 +63,7 @@ export default function Setlist() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6">
       <div className="mb-6 flex justify-between items-end border-b border-gray-700 pb-4">
         <div>
           <h2 className="text-4xl font-bold uppercase tracking-wider bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent inline-block">Official Setlist</h2>

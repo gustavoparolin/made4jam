@@ -97,7 +97,7 @@ export default function SongEditor() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <div className="bg-purple-950/20 border border-purple-900 rounded-lg p-6 mb-8 text-white">
         <h2 className="text-3xl font-bold text-purple-400 mb-2">Edit Song</h2>
         <p className="text-gray-300">Update band name, song details, and add lyrics.</p>
