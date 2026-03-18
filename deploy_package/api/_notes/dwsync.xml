@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <dwsync>
-<file name=".env" server="ftp.parolin.net/www/" local="134179003086131058" remote="134179330200000000" Dst="2" />
 <file name="index.php" server="ftp.parolin.net/www/" local="134179118983422045" remote="134179330200000000" Dst="2" />
 <file name=".htaccess" server="ftp.parolin.net/www/" local="134179003086131058" remote="134179330200000000" Dst="2" />
 <file name="config.php" server="ftp.parolin.net/www/" local="134179003086109485" remote="134179330200000000" Dst="2" />
+<file name=".htaccess" server="ftp.parolin.net/www/made4jam/" local="134179003086131058" remote="134182463400000000" Dst="2" />
+<file name="config.php" server="ftp.parolin.net/www/made4jam/" local="134179003086109485" remote="134182463400000000" Dst="2" />
+<file name="index.php" server="ftp.parolin.net/www/made4jam/" local="134182807059146524" remote="134182980000000000" Dst="2" />
 </dwsync>

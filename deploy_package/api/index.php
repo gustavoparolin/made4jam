@@ -282,7 +282,10 @@ try {
               rg.name as rhythm_guitar_name,
               lg.name as lead_guitar_name,
               b.name as bass_name,
-              d.name as drums_name
+              d.name as drums_name,
+              ev.name as extra_vocals_name,
+              eg.name as extra_guitar_name,
+              eb.name as extra_bass_name
             FROM m4j_lineups l
             JOIN m4j_songs s ON l.song_id = s.id
             LEFT JOIN m4j_musicians v ON l.vocals_id = v.id
@@ -290,6 +293,9 @@ try {
             LEFT JOIN m4j_musicians lg ON l.lead_guitar_id = lg.id
             LEFT JOIN m4j_musicians b ON l.bass_id = b.id
             LEFT JOIN m4j_musicians d ON l.drums_id = d.id
+            LEFT JOIN m4j_musicians ev ON l.extra_vocals_id = ev.id
+            LEFT JOIN m4j_musicians eg ON l.extra_guitar_id = eg.id
+            LEFT JOIN m4j_musicians eb ON l.extra_bass_id = eb.id
             WHERE s.event_id = ?
         ");
         $stmt->execute([$matches[1]]);
@@ -302,14 +308,17 @@ try {
         if (!$songId) response(['error' => 'Song ID is required'], 400);
 
         $stmt = $pdo->prepare("
-            INSERT INTO m4j_lineups (song_id, vocals_id, rhythm_guitar_id, lead_guitar_id, bass_id, drums_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO m4j_lineups (song_id, vocals_id, rhythm_guitar_id, lead_guitar_id, bass_id, drums_id, extra_vocals_id, extra_guitar_id, extra_bass_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE 
                 vocals_id = VALUES(vocals_id),
                 rhythm_guitar_id = VALUES(rhythm_guitar_id),
                 lead_guitar_id = VALUES(lead_guitar_id),
                 bass_id = VALUES(bass_id),
-                drums_id = VALUES(drums_id)
+                drums_id = VALUES(drums_id),
+                extra_vocals_id = VALUES(extra_vocals_id),
+                extra_guitar_id = VALUES(extra_guitar_id),
+                extra_bass_id = VALUES(extra_bass_id)
         ");
         $stmt->execute([
             $songId,
@@ -317,7 +326,10 @@ try {
             $input['rhythmGuitarId'] ?? null,
             $input['leadGuitarId'] ?? null,
             $input['bassId'] ?? null,
-            $input['drumsId'] ?? null
+            $input['drumsId'] ?? null,
+            $input['extraVocalsId'] ?? null,
+            $input['extraGuitarId'] ?? null,
+            $input['extraBassId'] ?? null
         ]);
         response(['success' => true]);
     }

@@ -7,6 +7,7 @@ import { useAppStore } from '../store/useAppStore';
 import AdminMusicians from './AdminMusicians';
 import AdminEvents from './AdminEvents';
 import AdminCoverBands from './AdminCoverBands';
+import AdminDashboard from './AdminDashboard';
 import { formatDate } from '../utils';
 import { generateRosterGapsText } from '../utils/whatsapp';
 import { generateSetlist, suggestBlockSize } from '../utils/setlistAlgorithm';
@@ -26,7 +27,7 @@ export default function Admin() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [authorized, setAuthorized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'lineups' | 'events' | 'musicians' | 'cover_bands'>('lineups');
+  const [activeTab, setActiveTab] = useState<'lineups' | 'events' | 'musicians' | 'cover_bands' | 'dashboard'>('lineups');
   const { eventId, setEventId, songs, blocks, selections, fetchSongs, fetchBlocks, fetchSelections, events, fetchEvents } = useAppStore();
 
   const [lineups, setLineups] = useState<any[]>([]);
@@ -703,6 +704,12 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
           >
             Cover Bands
           </button>
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-4 py-2 font-semibold transition ${activeTab === 'dashboard' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-400 hover:text-gray-200'}`}
+          >
+            📊 Dashboard
+          </button>
         </div>
         <a 
           href={`${import.meta.env.VITE_API_BASE}/export`} 
@@ -718,6 +725,14 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
       {activeTab === 'musicians' && <AdminMusicians />}
       {activeTab === 'events' && <AdminEvents />}
       {activeTab === 'cover_bands' && <AdminCoverBands />}
+      {activeTab === 'dashboard' && (
+        <AdminDashboard
+          blocks={blocks || []}
+          songs={songs}
+          lineups={lineups}
+          musicians={musicians}
+        />
+      )}
       {activeTab === 'lineups' && (
       <>
         <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 text-white shadow-xl">
