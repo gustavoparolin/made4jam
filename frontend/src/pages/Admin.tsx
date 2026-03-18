@@ -12,11 +12,14 @@ import { generateRosterGapsText } from '../utils/whatsapp';
 import { generateSetlist, suggestBlockSize } from '../utils/setlistAlgorithm';
 
 const ROLES = [
-  { id: 'vocals', dbField: 'vocals_id', label: 'Vocals' },
-  { id: 'rhythm_guitar', dbField: 'rhythm_guitar_id', label: 'Rhythm Guitar' }, 
-  { id: 'lead_guitar', dbField: 'lead_guitar_id', label: 'Lead Guitar' },       
-  { id: 'bass', dbField: 'bass_id', label: 'Bass' },
-  { id: 'drums', dbField: 'drums_id', label: 'Drums' },
+  { id: 'vocals', dbField: 'vocals_id', label: 'Vocals', isExtra: false },
+  { id: 'rhythm_guitar', dbField: 'rhythm_guitar_id', label: 'Rhythm Guitar', isExtra: false },
+  { id: 'lead_guitar', dbField: 'lead_guitar_id', label: 'Lead Guitar', isExtra: false },
+  { id: 'bass', dbField: 'bass_id', label: 'Bass', isExtra: false },
+  { id: 'drums', dbField: 'drums_id', label: 'Drums', isExtra: false },
+  { id: 'extra_vocals', dbField: 'extra_vocals_id', label: 'Vocals Extra', isExtra: true },
+  { id: 'extra_guitar', dbField: 'extra_guitar_id', label: 'Guitar Extra', isExtra: true },
+  { id: 'extra_bass', dbField: 'extra_bass_id', label: 'Bass Extra', isExtra: true },
 ];
 
 export default function Admin() {
@@ -31,6 +34,7 @@ export default function Admin() {
   const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set());
   const [fetchingLyrics, setFetchingLyrics] = useState(false);
   const [coverBands, setCoverBands] = useState<any[]>([]);
+  const [musicians, setMusicians] = useState<any[]>([]);
   const [aiToast, setAiToast] = useState<string | null>(null);
   const undoSnapshotRef = useRef<{ blocks: any[]; songAssignments: Array<{ id: number; block_id: number | null; sort_order: number }> } | null>(null);
 
@@ -63,6 +67,7 @@ export default function Admin() {
     fetchSelections();
     fetchLineups();
     fetchCoverBands();
+    fetchMusicians();
   }, [searchParams, navigate]);
 
   useEffect(() => {
@@ -70,6 +75,7 @@ export default function Admin() {
     fetchBlocks();
     fetchSelections();
     fetchLineups();
+    fetchMusicians();
   }, [eventId]);
 
   const fetchLineups = async () => {
@@ -88,6 +94,15 @@ export default function Admin() {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_BASE}/cover-bands`);
       if (res.ok) setCoverBands(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchMusicians = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE}/musicians`);
+      if (res.ok) setMusicians(await res.json());
     } catch (e) {
       console.error(e);
     }
@@ -262,6 +277,9 @@ export default function Admin() {
       leadGuitarId: currentLineup.lead_guitar_id || null,
       bassId: currentLineup.bass_id || null,
       drumsId: currentLineup.drums_id || null,
+      extraVocalsId: currentLineup.extra_vocals_id || null,
+      extraGuitarId: currentLineup.extra_guitar_id || null,
+      extraBassId: currentLineup.extra_bass_id || null,
     };
 
     members.forEach((m: any) => {
@@ -299,7 +317,10 @@ export default function Admin() {
         rhythmGuitarId: currentLineup.rhythm_guitar_id,
         leadGuitarId: currentLineup.lead_guitar_id,
         bassId: currentLineup.bass_id,
-        drumsId: currentLineup.drums_id
+        drumsId: currentLineup.drums_id,
+        extraVocalsId: currentLineup.extra_vocals_id || null,
+        extraGuitarId: currentLineup.extra_guitar_id || null,
+        extraBassId: currentLineup.extra_bass_id || null,
       };
       
       let changed = false;
@@ -359,7 +380,10 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
       rhythmGuitarId: field === 'rhythm_guitar_id' ? musicianId : currentLineup.rhythm_guitar_id,                                                                     
       leadGuitarId: field === 'lead_guitar_id' ? musicianId : currentLineup.lead_guitar_id,                                                                           
       bassId: field === 'bass_id' ? musicianId : currentLineup.bass_id,
-      drumsId: field === 'drums_id' ? musicianId : currentLineup.drums_id,      
+      drumsId: field === 'drums_id' ? musicianId : currentLineup.drums_id,
+      extraVocalsId: field === 'extra_vocals_id' ? musicianId : currentLineup.extra_vocals_id,
+      extraGuitarId: field === 'extra_guitar_id' ? musicianId : currentLineup.extra_guitar_id,
+      extraBassId: field === 'extra_bass_id' ? musicianId : currentLineup.extra_bass_id,
     };
 
     try {
@@ -788,11 +812,11 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
                         </label>
                       </td>
                       {ROLES.map(role => {
-                        const volunteers = getVolunteers(song.id, role.id);
+                        const volunteers = role.isExtra ? [] : getVolunteers(song.id, role.id);
                         const selectedId = lineup[role.dbField] || '';
                         const selectedName = lineup[role.dbField.replace('_id', '_name')] || null;
                         // Musician was assigned (e.g. via prefill) but never volunteered — still show their name
-                        const assignedNotInList = selectedId && !volunteers.some((v: any) => String(v.musician_id) === String(selectedId));
+                        const assignedNotInList = !role.isExtra && selectedId && !volunteers.some((v: any) => String(v.musician_id) === String(selectedId));
 
                         return (
                           <td key={role.id} className="px-3 py-3" onPointerDown={e => e.stopPropagation()}>
@@ -809,13 +833,18 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
                                 {assignedNotInList && (
                                   <option value={selectedId}>{selectedName ?? `#${selectedId}`}</option>
                                 )}
-                                {volunteers.map((v: any) => (
-                                  <option key={v.musician_id} value={v.musician_id}>
-                                    {v.musician_name}
-                                  </option>
-                                ))}
+                                {role.isExtra
+                                  ? musicians.map((m: any) => (
+                                      <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))
+                                  : volunteers.map((v: any) => (
+                                      <option key={v.musician_id} value={v.musician_id}>
+                                        {v.musician_name}
+                                      </option>
+                                    ))
+                                }
                               </select>
-                              {volunteers.length === 0 && !selectedId && (
+                              {!role.isExtra && volunteers.length === 0 && !selectedId && (
                                 <div className="text-xs text-purple-400 mt-1">0 volunteers</div>
                               )}
                             </div>
