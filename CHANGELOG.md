@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-03-17
+### Added
+- **Cumulative Block Dashboard**: New "📊 Dashboard" tab in Admin shows musician and band play counts accumulated block by block. Each collapsible section covers Block 1 up to that point. Inline bar charts visualise relative load. Amber highlight = musician not yet playing; red highlight = musician in >70% of cumulative songs (overplaying threshold). Reactive to lineup changes without page reload.
+
+## [1.8.0] - 2026-03-17
+### Changed
+- **Block Drag-and-Drop Group Move**: Dragging a block header now moves the entire block (header + all child songs) as a unit. A `DragOverlay` card displays song count during drag. Blocks matching the `Set N - Suffix` naming pattern are automatically renumbered after every reorder and the updated names are persisted to the API.
+
+## [1.7.0] - 2026-03-17
+### Changed
+- **Full-Width Layout**: Removed all `max-w-*` constraints from the navbar, main content area, Setlist, and SongEditor components so the UI uses the full browser width on wide screens.
+
+## [1.6.0] - 2026-03-17
+### Added
+- **AI Setlist Algorithm Refactor**: Replaced the per-song ≥3 member overlap heuristic with a drummer-to-cover-band ownership map (`buildDrummerToCoverBand`). Cover band detection via `isFullCoverBandSong` is now O(1) per song. All 15 algorithm unit tests pass.
+- **Extra Lineup Columns**: Added Vocals Extra, Guitar Extra, and Bass Extra columns to the lineup table. Dropdowns for extra roles show all musicians (not just volunteers). Extra role assignments are included in the lineup save payload and returned in the lineup API response.
+
 ## [1.5.0] - 2026-03-17
 ### Added
 - **AI / Algorithmic Setlist Assistant**: New "🤖 AI Setlist" toolbar button that automatically organises songs into optimised blocks. Groups songs by drummer (Priority 1), places cover band songs at the start of each block (≥3 lineup member overlap detected), then uses a greedy nearest-neighbour algorithm to minimise instrument swaps between consecutive songs. Splits large drummer groups into multiple blocks using a configurable max block size (smart default: `min(6, max(3, round(totalSongs / (drummers × 3))))`). Interleaves blocks across drummers in round-robin order so no two consecutive sets share the same drummer. Songs without a drummer assigned go into an "Unassigned Songs" block at the end. Undo toast restores the previous layout. Includes Vitest unit tests for all algorithm behaviours.
