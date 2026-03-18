@@ -29,6 +29,7 @@ export default function Admin() {
   const [shareText, setShareText] = useState<string | null>(null);
   const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set());
   const [fetchingLyrics, setFetchingLyrics] = useState(false);
+  const [coverBands, setCoverBands] = useState<any[]>([]);
 
   const deleteSong = async (songId: number) => {
     if (!confirm('Are you sure you want to delete this song?')) return;
@@ -58,6 +59,7 @@ export default function Admin() {
     fetchBlocks();
     fetchSelections();
     fetchLineups();
+    fetchCoverBands();
   }, [searchParams, navigate]);
 
   useEffect(() => {
@@ -74,6 +76,49 @@ export default function Admin() {
         const data = await res.json();
         setLineups(data);
       }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchCoverBands = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE}/cover-bands`);
+      if (res.ok) setCoverBands(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const prefillFromCoverBand = async (songId: number, bandName: string) => {
+    const members = coverBands.filter(cb => cb.band_name === bandName);
+    if (members.length === 0) return;
+
+    const currentLineup = lineups.find((l: any) => l.song_id === songId) || {};
+    const payload: any = {
+      songId,
+      vocalsId: currentLineup.vocals_id || null,
+      rhythmGuitarId: currentLineup.rhythm_guitar_id || null,
+      leadGuitarId: currentLineup.lead_guitar_id || null,
+      bassId: currentLineup.bass_id || null,
+      drumsId: currentLineup.drums_id || null,
+    };
+
+    members.forEach((m: any) => {
+      if (m.role === 'vocals' && !payload.vocalsId) payload.vocalsId = m.musician_id;
+      else if (m.role === 'rhythm_guitar' && !payload.rhythmGuitarId) payload.rhythmGuitarId = m.musician_id;
+      else if (m.role === 'lead_guitar' && !payload.leadGuitarId) payload.leadGuitarId = m.musician_id;
+      else if (m.role === 'bass' && !payload.bassId) payload.bassId = m.musician_id;
+      else if (m.role === 'drums' && !payload.drumsId) payload.drumsId = m.musician_id;
+    });
+
+    try {
+      await fetch(`${import.meta.env.VITE_API_BASE}/lineups/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      fetchLineups();
     } catch (e) {
       console.error(e);
     }
@@ -603,7 +648,25 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
                         );
                       })}
                       <td className="px-3 py-3 text-center" onPointerDown={e => e.stopPropagation()}>
-                        <div className="flex gap-2 justify-center">
+                        <div className="flex gap-2 justify-center items-center">
+                          {coverBands.length > 0 && (
+                            <select
+                              defaultValue=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  prefillFromCoverBand(song.id, e.target.value);
+                                  e.target.value = '';
+                                }
+                              }}
+                              className="bg-gray-800 border border-gray-600 rounded px-1 py-1 text-xs text-gray-300 focus:outline-none focus:border-purple-500 max-w-[90px]"
+                              title="Pre-fill lineup from a cover band"
+                            >
+                              <option value="">🎸 Fill...</option>
+                              {[...new Set(coverBands.map(cb => cb.band_name))].map(name => (
+                                <option key={name} value={name}>{name}</option>
+                              ))}
+                            </select>
+                          )}
                           <button
                             onClick={() => navigate(`/song-editor?songId=${song.id}`)}
                             className="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded text-sm font-semibold"
