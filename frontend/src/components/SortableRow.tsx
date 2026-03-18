@@ -1,7 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-export function SortableRow({ id, children, isBlock = false }: { id: string, children: React.ReactNode, isBlock?: boolean }) {
+export function SortableRow({ id, children, isBlock = false, hidden = false }: {
+  id: string;
+  children: React.ReactNode;
+  isBlock?: boolean;
+  /** Set to true to visually hide this row (e.g. song children while their block is being dragged) */
+  hidden?: boolean;
+}) {
   const {
     attributes,
     listeners,
@@ -11,14 +17,17 @@ export function SortableRow({ id, children, isBlock = false }: { id: string, chi
     isDragging,
   } = useSortable({ id });
 
-  const style = {
+  const baseStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
-    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
+    opacity: isDragging ? 0 : 1,
     zIndex: isDragging ? 50 : 'auto',
     position: isDragging ? 'relative' as const : 'static' as const,
   };
+
+  const style = hidden
+    ? { ...baseStyle, visibility: 'hidden' as const, pointerEvents: 'none' as const }
+    : baseStyle;
 
   if (isBlock) {
     return (

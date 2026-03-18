@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { SortableRow } from '../components/SortableRow';
 import { useAppStore } from '../store/useAppStore';
@@ -36,6 +36,7 @@ export default function Admin() {
   const [coverBands, setCoverBands] = useState<any[]>([]);
   const [musicians, setMusicians] = useState<any[]>([]);
   const [aiToast, setAiToast] = useState<string | null>(null);
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
   const undoSnapshotRef = useRef<{ blocks: any[]; songAssignments: Array<{ id: number; block_id: number | null; sort_order: number }> } | null>(null);
 
   const deleteSong = async (songId: number) => {
@@ -517,21 +518,81 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
     useSensor(KeyboardSensor)
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const item = activeItems.find(i => i.id === event.active.id);
+    if (item?.type === 'block') setDraggingBlockId(String(event.active.id));
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setDraggingBlockId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     const oldIndex = activeItems.findIndex(i => i.id === active.id);
-    const newIndex = activeItems.findIndex(i => i.id === over.id);
-    const newItems = arrayMove(activeItems, oldIndex, newIndex);
-    setActiveItems(newItems);
+    let newItems: typeof activeItems;
 
+    if (activeItems[oldIndex]?.type === 'block') {
+      // ── Block group-move: header + all its songs move as one unit ──
+      let dragEnd = oldIndex + 1;
+      while (dragEnd < activeItems.length && activeItems[dragEnd].type === 'song') dragEnd++;
+      const dragGroup = activeItems.slice(oldIndex, dragEnd);
+
+      // Resolve which block the drop target belongs to
+      const overIndex = activeItems.findIndex(i => i.id === over.id);
+      let overBlockStart = overIndex;
+      while (overBlockStart >= 0 && activeItems[overBlockStart].type !== 'block') overBlockStart--;
+
+      // Dropped inside its own group — ignore
+      if (overBlockStart === oldIndex) return;
+
+      const movingDown = overBlockStart > oldIndex;
+      const without = [...activeItems.slice(0, oldIndex), ...activeItems.slice(dragEnd)];
+      const targetInReduced = without.findIndex(i => i.id === activeItems[overBlockStart].id);
+
+      let insertAt: number;
+      if (movingDown) {
+        // Insert after the target block's last song
+        let targetEnd = targetInReduced + 1;
+        while (targetEnd < without.length && without[targetEnd].type === 'song') targetEnd++;
+        insertAt = targetEnd;
+      } else {
+        // Insert before the target block
+        insertAt = targetInReduced;
+      }
+
+      newItems = [...without.slice(0, insertAt), ...dragGroup, ...without.slice(insertAt)];
+    } else {
+      const newIndex = activeItems.findIndex(i => i.id === over.id);
+      newItems = arrayMove(activeItems, oldIndex, newIndex);
+    }
+
+    // ── Auto-renumber "Set N - Suffix" blocks to match new positions ──
+    const finalItems = newItems.map(i => ({ ...i, data: { ...i.data } }));
+    const blocksRenamed = new Map<number, string>();
+    let setPosition = 0;
+    for (const item of finalItems) {
+      if (item.type === 'block' && item.data.id !== 0) {
+        setPosition++;
+        const match = (item.data.name as string).match(/^Set (\d+) - (.+)$/);
+        if (match) {
+          const newName = `Set ${setPosition} - ${match[2]}`;
+          if (newName !== item.data.name) {
+            blocksRenamed.set(item.data.id, newName);
+            item.data.name = newName; // optimistic UI update
+          }
+        }
+      }
+    }
+
+    setActiveItems(finalItems);
+
+    // ── Build DB update payloads ──
     let currentBlockId: number | null = null;
     let blockSort = 0;
     const songsToUpdate: Array<{ id: number; sort_order: number; block_id: number | null }> = [];
     const blocksToUpdate: Array<{ id: number; sort_order: number }> = [];
 
-    newItems.forEach((item, index) => {
+    finalItems.forEach((item, index) => {
       if (item.type === 'block') {
         if (item.data.id !== 0) {
           currentBlockId = item.data.id;
@@ -551,6 +612,20 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(blocksToUpdate)
         });
+        // Persist any renames
+        if (blocksRenamed.size > 0) {
+          await Promise.all(
+            blocksToUpdate
+              .filter(bu => blocksRenamed.has(bu.id))
+              .map(bu =>
+                fetch(`${import.meta.env.VITE_API_BASE}/blocks/${bu.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name: blocksRenamed.get(bu.id)!, sort_order: bu.sort_order })
+                })
+              )
+          );
+        }
       }
       if (songsToUpdate.length > 0) {
         await fetch(`${import.meta.env.VITE_API_BASE}/songs/reorder`, {
@@ -740,7 +815,7 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
       </div>
 
       <div className="overflow-x-auto pb-20">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <SortableContext items={activeItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
             <table className="w-full border-collapse">
               <thead>
@@ -790,9 +865,14 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
 
                   const song = item.data;
                   const lineup = lineups.find((l: any) => l.song_id === song.id) || {};
+                  // Hide songs whose block is currently being dragged (they move with the block)
+                  const draggingBlockDataId = draggingBlockId
+                    ? activeItems.find(i => i.id === draggingBlockId)?.data.id
+                    : null;
+                  const hiddenBecauseBlockDragging = draggingBlockDataId != null && song.block_id === draggingBlockDataId;
 
                   return (
-                    <SortableRow key={item.id} id={item.id}>
+                    <SortableRow key={item.id} id={item.id} hidden={hiddenBecauseBlockDragging}>
                       <td className="px-2 py-2 text-gray-500 cursor-grab">{'≡'}</td>
                       <td className="px-2 py-2 md:px-4 md:py-3 text-gray-300 font-bold text-sm">{song.artist}</td>
                       <td className="px-4 py-3">
@@ -893,6 +973,24 @@ const saveLineup = async (songId: number, field: string, musicianId: number | nu
               </tbody>
             </table>
           </SortableContext>
+
+          {/* Drag overlay: shows a compact block card following the cursor when dragging a block */}
+          <DragOverlay dropAnimation={null}>
+            {draggingBlockId ? (() => {
+              const block = activeItems.find(i => i.id === draggingBlockId);
+              if (!block) return null;
+              const blockIdx = activeItems.indexOf(block);
+              let songCount = 0;
+              let si = blockIdx + 1;
+              while (si < activeItems.length && activeItems[si].type === 'song') { songCount++; si++; }
+              return (
+                <div className="bg-gray-800 border-2 border-purple-500 rounded-lg px-6 py-4 font-bold text-purple-400 shadow-2xl cursor-grabbing">
+                  ≡ {block.data.name}
+                  <span className="text-gray-400 font-normal ml-2 text-sm">({songCount} songs)</span>
+                </div>
+              );
+            })() : null}
+          </DragOverlay>
         </DndContext>
       </div>
       </>
