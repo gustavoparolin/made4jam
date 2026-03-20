@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.4] - 2026-03-20
+### Added
+- **SQL Event Dump**: Added full MySQL dump for Gus & Gardy Farewell event (2026-03-20) in sql/2026-03-20-01.sql. Includes all tables, data, and lyrics for event songs.
+
+## [1.9.3] - 2026-03-18
+### Added
+- **Copy Lineup to Excel**: Added a "📋 Copy Lineup" button to the Admin Lineup Dashboard. Exports the current lineup table (all columns except actions) as a tab-separated file for direct pasting into Excel. Respects block/sort order. Includes fallback for browsers without clipboard API.
+### Added
+- **Feature 3 (Smart Auto-Fill)**: Added a "⚡ Smart Auto-Fill" button in the Admin Setlist Builder to automatically assign musicians when they are the only volunteer for a role.
+- **Feature 2 (WhatsApp Export)**: Added an "📤 Share Gaps" button to Admin and Public Roster pages, allowing 1-click sharing of missing roster slots directly to native WhatsApp/clipboard.
+
 ## [1.9.2] - 2026-03-17
 ### Fixed
 - **Dashboard musician count**: A musician filling multiple roles in one song (e.g. vocals + guitar) is now counted once per song, not once per role.
@@ -46,15 +57,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-03-15
 ### Added
-- **Unplayable Songs Filter**: Added a "🔍 Select Unplayable" button in the Admin Lineup Dashboard to automatically select songs missing critical instruments (no drummer, no bass, or no guitars).
 - **Bulk Delete**: Added a "🗑️ Delete Selected" button to quickly remove unplayable or selected songs from the lineup.
 - **Expand/Collapse**: Added "Expand All Bands" and "Collapse All Bands" toggles to the Admin Lineup and Public Setlist pages.
 
-## [1.1.1] - 2026-03-15
 ### Changed
 - Refactored "Share Gaps" functionality to display the content in a large text modal with an explicit "Copy to Clipboard" button rather than invoking device OS-level share sheets.
 
-## [1.1.0] - 2026-03-15
+## [1.9.3] - 2026-03-18
+### Added
+- **Copy Lineup to Excel**: Added a "📋 Copy Lineup" button to the Admin Lineup Dashboard. Exports the current lineup table (all columns except actions) as a tab-separated file for direct pasting into Excel. Respects block/sort order. Includes fallback for browsers without clipboard API.
 ### Added
 - **Feature 3 (Smart Auto-Fill)**: Added a "⚡ Smart Auto-Fill" button in the Admin Setlist Builder to automatically assign musicians when they are the only volunteer for a role.
 - **Feature 2 (WhatsApp Export)**: Added an "📤 Share Gaps" button to Admin and Public Roster pages, allowing 1-click sharing of missing roster slots directly to native WhatsApp/clipboard.
