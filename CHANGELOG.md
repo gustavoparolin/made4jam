@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-10-01
+### Security
+- **chore(deps)**: corrige os alertas abertos do Dependabot sem major bump, só `npm audit fix` e `npm update` (lockfiles; `package.json` intocado). Frontend: react-router/react-router-dom 7.13.x → 7.18.4, vite 6.4.1 → 6.4.3, vitest e @vitest/mocker 4.1.0 → 4.1.11, postcss 8.5.8 → 8.5.28, picomatch 4.0.x → 4.0.7, @babel/core 7.29.0 → 7.29.7, baseline-browser-mapping → 2.11.26, browserslist → 4.29.3, nanoid → 3.3.19. Backend: qs → 6.16.0, path-to-regexp → 8.4.2, picomatch 2.x → 2.3.2, body-parser → 2.3.0, brace-expansion → 5.0.12, tsx 4.21.0 → 4.23.15 (puxa esbuild 0.27.4 → 0.28.2).
+
 ## [1.9.4] - 2026-03-20
 ### Added
 - **SQL Event Dump**: Added full MySQL dump for Gus & Gardy Farewell event (2026-03-20) in sql/2026-03-20-01.sql. Includes all tables, data, and lyrics for event songs.
